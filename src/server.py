@@ -7,14 +7,16 @@ class Server:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((host, port))
         self.sock.listen()
+        self.clients = []
         print(f'Server started on {host}:{port}, waiting for connections...')
 
     def accept(self, convo):
         while True:
             conn, addr = self.sock.accept()
+            self.clients.append(conn)
             print(f'Connected by {addr}')
             threading.Thread(target=self.handle_client,
-                             args=(conn, convo)).start()
+                             args=(conn, convo,)).start()
 
     def handle_client(self, conn, convo):
         with conn:
@@ -23,10 +25,19 @@ class Server:
                 if not data:
                     break
                 convo.append(data.decode('utf-8'))
-                conn.sendall(data)
+                self.broadcast(conn, data)
 
     def close(self):
         self.sock.close()
+
+    def broadcast(self, conn, data):
+        for client in self.clients:
+            if client != conn:
+                try:
+                    client.sendall(data)
+                except Exception as e:
+                    print(f'Error Broadcasting to a Client: {e}')
+                    self.clients.remove(client)
 
 
 convo = []
