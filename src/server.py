@@ -15,6 +15,7 @@ class Server:
     def accept(self, convo):
         while True:
             conn, addr = self.sock.accept()
+            conn.settimeout(360)
             self.clients.append(conn)
             print(f'Connected by {addr}')
             threading.Thread(target=self.handle_client,
@@ -44,9 +45,17 @@ class Server:
                         break
                     convo.append(data.decode('utf-8'))
                     self.broadcast(conn, data)
+                except socket.timeout:
+                    print(f"Connection to {conn.getpeername()} timed out.")
                 except Exception as e:
                     print(f'Error handling client {addr}: {e}')
                     break
+                finally:
+                    if conn in self.clients:
+                        self.clients.remove(conn)
+                    if conn in self.client_usernames:
+                        del self.client_usernames[conn]
+                    conn.close()
 
     def close(self):
         self.sock.close()
