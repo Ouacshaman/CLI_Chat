@@ -1,4 +1,5 @@
 import socket
+import sys
 
 
 class Client:
@@ -16,7 +17,8 @@ class Client:
             print("Sent: ", repr(replies))
 
 
-client = Client("127.0.0.1", 8080)
+host, port = sys.argv[1], int(sys.argv[2])
+client = Client(host, port)
 try:
     client.messaging()
 except KeyboardInterrupt:

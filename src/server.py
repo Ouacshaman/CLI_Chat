@@ -2,10 +2,11 @@ import socket
 import threading
 import re
 import json
+import sys
 
 
 class Server:
-    def __init__(self, host, port):
+    def __init__(self, host, port, file_path):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((host, port))
         self.sock.listen()
@@ -53,7 +54,8 @@ class Server:
                     data = conn.recv(65536)
                     if not data or "disconnected" in data.decode():
                         break
-                    convo.append(data.decode('utf-8'))
+                    convo.append(self.client_usernames[conn]
+                                 + data.decode('utf-8') + ' \n ')
                     self.broadcast(conn, data)
                 except socket.timeout:
                     print(f"Connection to {conn.getpeername()} timed out.")
@@ -79,11 +81,13 @@ class Server:
                 if client != conn:
                     try:
                         decoded = data.decode('utf-8')
-                        msg = self.client_usernames[conn] + ": " + decoded
+                        msg = (self.client_usernames[conn] + ": " +
+                               decoded + " \n ")
+                        convo.append(msg)
                         client.sendall(msg.encode('utf-8'))
                     except Exception:
                         print(f'Client {client} disconnected ' +
-                              'while broadcasting.')
+                              'while broadcasting. \n ')
                         self.cleanup_connection(client)
 
     def non_target_cmd(self, data):
@@ -97,7 +101,8 @@ class Server:
         for client in self.clients:
             if client != conn:
                 try:
-                    msg = f"{self.client_usernames[conn]} has joined"
+                    msg = f"{self.client_usernames[conn]} has joined \n "
+                    convo.append(msg)
                     client.sendall(msg.encode('utf-8'))
                 except Exception as e:
                     print(f"Error during Intro: {e}")
@@ -105,7 +110,8 @@ class Server:
 
     def password_failed(self, conn):
         try:
-            msg = "incorrect password"
+            msg = "incorrect password \n "
+            convo.append(msg)
             conn.sendall(msg.encode('utf-8'))
         except Exception as e:
             print(f"failed to send password failure: {e}")
@@ -128,7 +134,8 @@ class Server:
         if target_client:
             try:
                 sender_username = self.client_usernames[conn]
-                pm_msg = f"(PM from {sender_username}: {message})"
+                pm_msg = f"(PM from {sender_username}: {message}) \n "
+                convo.append(pm_msg)
                 target_client.sendall(pm_msg.encode('utf-8'))
             except ValueError:
                 conn.sendall("Invalid private message format. Use:" +
@@ -171,7 +178,8 @@ def write_json(file_path, data):
 
 
 convo = []
-s = Server("127.0.0.1", 8080)
+host, port, file_path = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+s = Server(host, port, file_path)
 
 try:
     s.accept(convo)
@@ -181,7 +189,4 @@ except KeyboardInterrupt:
 
 
 for item in convo:
-    lst = item.split(" ")
-    name = lst.pop()
-    msg = " ".join(lst)
-    print(f"{name}: {msg}")
+    print(item)
