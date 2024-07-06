@@ -25,7 +25,7 @@ class Server:
                              args=(conn, convo, addr,)).start()
 
     def handle_client(self, conn, convo, addr):
-        with conn:
+        try:
             initial_data = conn.recv(65536).decode('utf-8')
             if initial_data.startswith("/username "):
                 split_data = initial_data.split(" ", 2)
@@ -61,14 +61,8 @@ class Server:
                 except Exception as e:
                     print(f'Error handling client {addr}: {e}')
                     break
-                finally:
-                    if conn in self.clients:
-                        self.clients.remove(conn)
-                    if conn in self.client_usernames:
-                        disconnected_user = self.client_usernames[conn]
-                        del self.client_usernames[conn]
-                        print(f'{disconnected_user} has disconnected.')
-                    conn.close()
+        finally:
+            self.cleanup_connection(conn)
 
     def close(self):
         self.sock.close()
@@ -85,15 +79,12 @@ class Server:
                 if client != conn:
                     try:
                         decoded = data.decode('utf-8')
-                        msg = self.client_usernames[conn] + decoded
+                        msg = self.client_usernames[conn] + ": " + decoded
                         client.sendall(msg.encode('utf-8'))
                     except Exception:
-                        print(f'Client {client} disconnected while broadcasting.')
-                        self.clients.remove(client)
-                        if client in self.client_usernames:
-                            print(f'{self.client_usernames[client]} has disconnected.')
-                            del self.client_usernames[client]
-                        client.close()
+                        print(f'Client {client} disconnected ' +
+                              'while broadcasting.')
+                        self.cleanup_connection(client)
 
     def non_target_cmd(self, data):
         decoded = data.decode('utf-8')
@@ -110,7 +101,7 @@ class Server:
                     client.sendall(msg.encode('utf-8'))
                 except Exception as e:
                     print(f"Error during Intro: {e}")
-                    self.clients.remove(client)
+                    self.cleanup_connection(client)
 
     def password_failed(self, conn):
         try:
@@ -119,7 +110,7 @@ class Server:
         except Exception as e:
             print(f"failed to send password failure: {e}")
         finally:
-            conn.close()
+            self.cleanup_connection(conn)
 
     def handle_pm(self, conn, data):
         decoded = data.decode('utf-8')
@@ -139,14 +130,29 @@ class Server:
                 sender_username = self.client_usernames[conn]
                 pm_msg = f"(PM from {sender_username}: {message})"
                 target_client.sendall(pm_msg.encode('utf-8'))
+            except ValueError:
+                conn.sendall("Invalid private message format. Use:" +
+                             " /pm <username> <message>".encode('utf-8'))
             except Exception as e:
                 print(f"Error sending private message using \\{command}: {e}")
+                self.cleanup_connection(conn)
         else:
             try:
                 msg = f"User: {target_client} is not available"
                 conn.sendall(msg.encode('utf-8'))
             except Exception as e:
                 print(f"Error sending unavailability message: {e}")
+
+    def cleanup_connection(self, conn):
+        if conn in self.clients:
+            self.clients.remove(conn)
+        if conn in self.client_usernames:
+            username = self.client_usernames.pop(conn)
+            print(f'{username} has disconnected.')
+        try:
+            conn.close()
+        except Exception as e:
+            print(f'Error closing connection {conn}: {e}')
 
 
 def load_json(file_path):
